@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Calendrier et Carte</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.css" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fullcalendar/3.10.2/fullcalendar.min.js"></script>
+  <script src="https://js.arcgis.com/4.23/"></script>
+  <style>
+    #calendar {
+      max-width: 900px;
+      margin: 40px auto;
+    }
+    #viewDiv {
+      height: 500px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div id="calendar"></div>
+<div id="viewDiv"></div>
+
+<script>
+  $(document).ready(function() {
+    $('#calendar').fullCalendar({
+      selectable: true,
+      header: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'month,agendaWeek,agendaDay'
+      },
+      dayClick: function(date) {
+        queryLayer(date.format('YYYY-MM-DD'));
+      }
+    });
+
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/layers/FeatureLayer",
+      "esri/tasks/support/Query"
+    ], function(Map, MapView, FeatureLayer, Query) {
+      var map = new Map({
+        basemap: "streets-navigation-vector"
+      });
+
+      var view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [0.1278, 49.4431],
+        zoom: 10
+      });
+
+      var featureLayer = new FeatureLayer({
+        url: "https://services2.arcgis.com/OSTljxuSj3y4z219/arcgis/rest/services/AGR_Cuisinez_la_Normandie__2023_vue/FeatureServer"
+      });
+
+      map.add(featureLayer);
+
+      window.queryLayer = function(selectedDate) {
+        var query = featureLayer.createQuery();
+        query.where = "a_date = DATE '" + selectedDate + "'";
+        query.outFields = ["*"];
+        query.returnGeometry = true;
+
+        featureLayer.queryFeatures(query)
+          .then(function(response) {
+            displayResults(response.features);
+          })
+          .catch(function(error) {
+            console.error("Erreur lors de la requête :", error);
+          });
+      };
+
+      function displayResults(features) {
+        if (features.length === 0) {
+          console.log("Aucun résultat trouvé.");
+          return;
+        }
+
+        view.graphics.removeAll();
+        features.forEach(function(feature) {
+          var graphic = {
+            geometry: feature.geometry,
+            symbol: {
+              type: "simple-marker",
+              color: "red",
+              size: "8px"
+            },
+            attributes: feature.attributes
+          };
+          view.graphics.add(graphic);
+        });
+
+        if (features.length > 0) {
+          view.goTo({
+            target: features.map(function(f) { return f.geometry; }),
+            zoom: 12
+          });
+        }
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
+
